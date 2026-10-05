@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">HeartRateBlock</string>
+    <string name="current_heart_rate">Current heart rate</string>
+    <string name="edit_threshold">Edit threshold</string>
+    <string name="blocked_apps">Blocked apps</string>
+    <string name="edit">Edit</string>
 </resources>

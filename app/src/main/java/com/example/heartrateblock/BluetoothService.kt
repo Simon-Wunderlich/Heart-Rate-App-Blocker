@@ -12,28 +12,60 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
+import androidx.activity.result.ActivityResultCaller
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresPermission
+import androidx.core.app.ActivityCompat
 import androidx.core.app.ActivityCompat.startActivityForResult
+import androidx.core.content.ContextCompat
 import java.util.UUID
 
-class BluetoothService {
+class BluetoothService (private val caller : ActivityResultCaller,
+    private val context: Context) {
 
-    @RequiresPermission(allOf= [Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT])
-    fun scan(context: Context) {
+    private val permissionLauncher: ActivityResultLauncher<String> =
+        caller.registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                scan()
+            }
+        }
+
+    fun checkAndRequestPermission() : Boolean {
+        val permissions = listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        val missingPermissions = permissions.filter {
+                ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (!missingPermissions.isEmpty())
+        {
+            permissionLauncher.launch(missingPermissions.first())
+            return false
+        }
+        return true
+    }
+
+
+    fun scan() {
+        // Checks for permissions
+        // If all permissions are granted, continue
+        // If at least 1 permission has not been granted, the function exits and will be called again once permission is accepted
+        if (!checkAndRequestPermission())
+            return
+
+        println("huh")
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
 
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            val REQUEST_ENABLE_BT = 2
-            val activity = context.getActivity()
-            if (activity != null)
-                startActivityForResult( activity, enableBtIntent, REQUEST_ENABLE_BT, null)
-            else
-                return
-        }
+        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        val REQUEST_ENABLE_BT = 2
+        val activity = context.getActivity()
+        if (activity != null)
+            startActivityForResult( activity, enableBtIntent, REQUEST_ENABLE_BT, null)
+        else
+            return
 
         val bleScanner = bluetoothAdapter?.bluetoothLeScanner
         var isScanning = false
@@ -41,8 +73,14 @@ class BluetoothService {
 
         val SCAN_PERIOD: Long = 10000
 
-
         fun scanLeDevice() {
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_SCAN
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                checkAndRequestPermission()
+            }
             if (!isScanning) {
                 handler.postDelayed({
                     isScanning = false
@@ -61,6 +99,7 @@ class BluetoothService {
             // connectGatt handles connection states via a custom callback
             bluetoothGatt = device.connectGatt(context, false, gattCallback)
         }
+
         scanLeDevice()
     }
     private val leScanCallback = object : ScanCallback() {
@@ -68,7 +107,6 @@ class BluetoothService {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             super.onScanResult(callbackType, result)
             val device: BluetoothDevice = result.device
-            // Access device.name or device.address here to populate your UI
             println(device.name)
         }
     }
@@ -77,10 +115,8 @@ class BluetoothService {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                // Successfully connected, now discover services
                 gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                // Handle disconnection logic
                 gatt.close()
             }
         }
@@ -88,7 +124,6 @@ class BluetoothService {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                // Services found! Now you can look for target Characteristics
                 readCustomCharacteristic(gatt)
             }
         }
@@ -99,8 +134,7 @@ class BluetoothService {
             status: Int
         ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                val value = characteristic.value // Raw byte array data received
-                // Parse data contextually (e.g., String, Int, Hex)
+                val value = characteristic.value
             }
         }
     }
