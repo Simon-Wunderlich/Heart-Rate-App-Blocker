@@ -22,6 +22,9 @@ class MainActivity : AppCompatActivity() {
         }
 //        val bluetoothService = BluetoothService(this, this)
 //        bluetoothService.scan()
+        //Java
+
+
     }
 
 }
